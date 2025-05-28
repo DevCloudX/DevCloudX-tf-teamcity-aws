@@ -1,0 +1,84 @@
+name: Deploy TeamCity with Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_access_key:
+        description: 'AWS Access Key ID'
+        required: true
+        type: string
+      aws_secret_key:
+        description: 'AWS Secret Access Key'
+        required: true
+        type: string
+
+jobs:
+
+  deploy-teamcity-infra:
+    name: 🚀 Deploy TeamCity Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: 📦 Terraform Init (TeamCity)
+        run: terraform init
+        working-directory: terraform
+
+      - name: 🧪 Terraform Plan (TeamCity Infra)
+        run: |
+          terraform plan \
+            -var="aws_access_key=${{ github.event.inputs.aws_access_key }}" \
+            -var="aws_secret_key=${{ github.event.inputs.aws_secret_key }}"
+        working-directory: terraform
+
+      - name: ✅ Terraform Apply (TeamCity Infra)
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_access_key=${{ github.event.inputs.aws_access_key }}" \
+            -var="aws_secret_key=${{ github.event.inputs.aws_secret_key }}"
+        working-directory: terraform
+
+      - name: 🌐 Show TeamCity Public IP
+        run: terraform output teamcity_server_url
+        working-directory: terraform
+
+      - name: 📤 Save Terraform State (TeamCity)
+        uses: actions/upload-artifact@v4
+        with:
+          name: teamcity-terraform-state
+          path: terraform/terraform.tfstate
+
+  destroy-teamcity-infra:
+    name: 🗑️ Destroy TeamCity Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: 📥 Download Terraform State (TeamCity)
+        uses: actions/download-artifact@v4
+        with:
+          name: teamcity-terraform-state
+          path: terraform
+
+      - name: 📦 Terraform Init (TeamCity)
+        run: terraform init
+        working-directory: terraform
+
+      - name: ❌ Terraform Destroy (TeamCity)
+        run: |
+          terraform destroy -auto-approve \
+            -var="aws_access_key=${{ github.event.inputs.aws_access_key }}" \
+            -var="aws_secret_key=${{ github.event.inputs.aws_secret_key }}"
+        working-directory: terraform
